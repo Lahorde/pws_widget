@@ -1,0 +1,26 @@
+#!/bin/sh
+###################################################################
+# /etc/NetworkManager/dispatcher.d/52-start-pws
+# This file starts/stops pws on network connection/disconnection
+# If you use NetworkManager dispatcher
+# https://wiki.archlinux.org/index.php/NetworkManager#Network_services_with_NetworkManager_dispatcher
+###################################################################
+echo "Executing PWS dispatcher script"
+
+if [ "$2" == 'down' ] && ! ping google.fr -c 1 -W 1; then
+    echo "connection down"
+    if systemctl status pws |grep "Active: active" > /dev/null; then
+      echo "stopping pws"
+      systemctl stop pws
+    fi
+elif [ "$2" == 'up' ]; then
+    echo "connection up"
+    if ! systemctl status pws |grep "Active: active" > /dev/null; then
+      echo "restarting pws"
+      systemctl restart pws
+    fi
+
+else
+    echo "nothing to do for event $2"
+fi
+exit 0

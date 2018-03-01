@@ -1,0 +1,17 @@
+[Unit]
+Description=PWS client. Gathered weather, pollution, and others data from WU, ATMO, PiouPiou
+Requires=graphical.target network-online.target
+After=graphical.target network-online.target
+
+
+[Service]
+# Note: setting PYTHONUNBUFFERED is necessary to see the output of this service in the journal
+# See https://docs.python.org/2/using/cmdline.html#envvar-PYTHONUNBUFFERED
+Environment=PYTHONUNBUFFERED=true
+Type=simple
+RemainAfterExit=no
+ExecStart=/usr/bin/sh -c "PWS_WIDGET_PATH/start_pws_polling.sh"
+
+[Install]
+WantedBy=graphical.target
+
