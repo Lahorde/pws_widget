@@ -16,7 +16,7 @@ A [conky](https://github.com/brndnmtthws/conky) widget displaying some weather, 
 
 Here is result in xfce :
 
-![alt text](https://github.com/Lahorde/pws_client/raw/master/snapshot/pws_conky.jpg)
+![alt text](https://github.com/Lahorde/pws_widget/raw/master/snapshot/pws_conky.jpg)
 
 ## Configuration
 Set needed parameters (token, city...) in : 
