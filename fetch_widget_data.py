@@ -31,29 +31,35 @@ from influxdb import client as influxdb
 
 NA_FIELD = "--"
 
+def get_param(param_name) :
+    if len(os.environ[param_name]) > 0 :
+        return os.environ[param_name]
+    else :
+        raise Exception("Param '{}' has zero length".format(param_name))
+
 try:
-    API_KEY = os.environ["WU_KEY"]
-    PWS_ID = os.environ["WU_PWS_ID"]
+    API_KEY = get_param("WU_KEY")
+    PWS_ID = get_param("WU_PWS_ID")
     # emplacement du fichier où sont écrites les informations extraites depuis weather underground
-    POLLED_DATA_PATH = os.environ["PWS_POLLING_DATA_PATH"]
+    POLLED_DATA_PATH = get_param("PWS_POLLING_DATA_PATH")
     #station vent
-    VENT_1_URL_SUFFIX = os.environ["VENT_1_URL_SUFFIX"]
-    VENT_PIOU_PIOU_URL_PREFIX = os.environ["VENT_PIOU_PIOU_URL_PREFIX"]
-    VENT_1_PIOU_PIOU_URL_SUFFIX = os.environ["VENT_1_PIOU_PIOU_URL_SUFFIX"]
-    VENT_2_PIOU_PIOU_URL_SUFFIX = os.environ["VENT_2_PIOU_PIOU_URL_SUFFIX"]
+    VENT_1_URL_SUFFIX = get_param("VENT_1_URL_SUFFIX")
+    VENT_PIOU_PIOU_URL_PREFIX = get_param("VENT_PIOU_PIOU_URL_PREFIX")
+    VENT_1_PIOU_PIOU_URL_SUFFIX = get_param("VENT_1_PIOU_PIOU_URL_SUFFIX")
+    VENT_2_PIOU_PIOU_URL_SUFFIX = get_param("VENT_2_PIOU_PIOU_URL_SUFFIX")
     #data influxdb
-    INFLUX_DB_HOST_URL = os.environ["INFLUX_DB_HOST_URL"]
-    INFLUX_DB_HOST_PORT = os.environ["INFLUX_DB_HOST_PORT"]
-    INFLUX_DB_USER = os.environ["INFLUX_DB_USER"]
-    INFLUX_DB_PASS = os.environ["INFLUX_DB_PASS"]
-    INFLUXDB_SERIES_SUFFIX = os.environ["INFLUXDB_SERIES_SUFFIX"]
-    INFLUXDB_NAME = os.environ["INFLUXDB_NAME"]
-    INFLUX_HOME_TEMP_FIELD = os.environ["INFLUXDB_HOME_TEMP_FIELD"]
-    INFLUXDB_HOME_HUMIDITY_FIELD = os.environ["INFLUXDB_HOME_HUMIDITY_FIELD"]
+    INFLUX_DB_HOST_URL = get_param("INFLUX_DB_HOST_URL")
+    INFLUX_DB_HOST_PORT = get_param("INFLUX_DB_HOST_PORT")
+    INFLUX_DB_USER = get_param("INFLUX_DB_USER")
+    INFLUX_DB_PASS = get_param("INFLUX_DB_PASS")
+    INFLUXDB_SERIES_SUFFIX = get_param("INFLUXDB_SERIES_SUFFIX")
+    INFLUXDB_NAME = get_param("INFLUXDB_NAME")
+    INFLUX_HOME_TEMP_FIELD = get_param("INFLUXDB_HOME_TEMP_FIELD")
+    INFLUXDB_HOME_HUMIDITY_FIELD = get_param("INFLUXDB_HOME_HUMIDITY_FIELD")
     #data pollution
-    POLLUTION_STATION_ID = os.environ["POLLUTION_STATION_ID"]
-    ATMO_API_TOKEN = os.environ["ATMO_API_TOKEN"]
-    ATMO_POLLUTION_LEVEL_LOCATION = os.environ["ATMO_POLLUTION_LEVEL_LOCATION"]
+    POLLUTION_STATION_ID = get_param("POLLUTION_STATION_ID")
+    ATMO_API_TOKEN = get_param("ATMO_API_TOKEN")
+    ATMO_POLLUTION_LEVEL_LOCATION = get_param("ATMO_POLLUTION_LEVEL_LOCATION")
 
 
 except KeyError as e:
@@ -229,13 +235,13 @@ class LastMeasures():
                 f.write("Maison_salon_temp = " + home_temp + "\n")
                 f.write("Maison_salon_hum = " + home_hum + "\n")             
 
-                dioxyde_azote="NA"
-                monoxyde_azote = "NA"
-                ozone = "NA"
-                pm_10 = "NA"
-                poll_station="NA"
-                poll_timestamp="NA"
-                pm_2_5 = "NA"
+                dioxyde_azote=NA_FIELD
+                monoxyde_azote = NA_FIELD
+                ozone = NA_FIELD
+                pm_10 = NA_FIELD
+                poll_station=NA_FIELD
+                poll_timestamp=NA_FIELD
+                pm_2_5 = NA_FIELD
 
                 if len(poll_data) > 0 :
                     try :
@@ -337,7 +343,7 @@ class LastMeasures():
             return NA_FIELD
 
     def _get_curr_poll_level(self):
-        ret = ["NA", "NA"] 
+        ret = [NA_FIELD, NA_FIELD] 
         try:
             poll_levels = LastMeasures._get_json(self.atmo_index_url)["indices"]["data"]
             for indice in poll_levels :
@@ -345,7 +351,7 @@ class LastMeasures():
                     ret[0] = "{:.2f}".format(float(indice["valeur"]))
                 elif indice["date"] == (datetime.date.today() + datetime.timedelta(days=1)).strftime("%Y-%m-%d") :
                     ret[1] = "{:.2f}".format(float(indice["valeur"]))
-                if ret[0] != "NA" and ret[1] != "NA" :
+                if ret[0] != NA_FIELD and ret[1] != NA_FIELD :
                     break 
         except Exception as e:
             print("Cannot get ATMO pollution level for '{}' - {}".format(ATMO_API_TOKEN, e), file=sys.stderr)
@@ -403,7 +409,7 @@ class LastMeasures():
             # iterate over polluants 
             for row in cr :
                 if (row[dates[len(dates)-1-date_index]]) == "-" :
-                    value = "NA"
+                    value = NA_FIELD
                 else : 
                     data_available = True 
                     value = row[dates[len(dates)-1-date_index]]
