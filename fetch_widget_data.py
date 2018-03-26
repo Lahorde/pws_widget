@@ -87,44 +87,50 @@ class LastMeasures():
         return self._atmo_index_url
 
     def fetch_data(self):
-        print("starting wu_pws_polling loop")
+        print( "Polling weather data...")
 
-        while True: # C'est le début de ma boucle pour démoniser mon programme
-            print( "Polling weather data...")
+        ###############################################
+        #           Le corps du programme             #
+        ###############################################
+        # Je récupère les informations fournies par wunderground grâce à leur api, au format json,
+        # en une seule fois (forecast et conditions), et en français
+        # Un exemple de code est fourni sur le site wunderground
+        parsed_json_pws, parsed_json_forecast, parsed_json_wind_1, parsed_json_wind_2 = None, None, None, None
 
-            ###############################################
-            #           Le corps du programme             #
-            ###############################################
-            # Je récupère les informations fournies par wunderground grâce à leur api, au format json,
-            # en une seule fois (forecast et conditions), et en français
-            # Un exemple de code est fourni sur le site wunderground
-            parsed_json_pws, parsed_json_forecast, parsed_json_wind_1, parsed_json_wind_2 = None, None, None, None
+        try:
+            parsed_json_pws = LastMeasures._get_json('http://api.wunderground.com/api/' + API_KEY + '/conditions/lang:FR/q/pws:' + PWS_ID + '.json')
+            pws_city = parsed_json_pws['current_observation']['observation_location']['city'].split(',')[1].strip() # la ville où se situe la pws
 
-            try:
-                parsed_json_pws = LastMeasures._get_json('http://api.wunderground.com/api/' + API_KEY + '/conditions/lang:FR/q/pws:' + PWS_ID + '.json')
-                pws_city = parsed_json_pws['current_observation']['display_location']['city'] # la ville où se situe la pws
+        except Exception as e: 
+            print( "Unable to parse PWS city - {}")
+            raise
 
-            except Exception as e: 
-                print( "Unable to parse PWS city - {}".format(e), file=sys.stderr)
+        try:
+            current_temp=current_weather=last_observation=humidity=wind_kph=wind_dir=pressure_mb=pressure_trend=feelslike_c=visibility=precip_last_hr=precip_day=UV=NA_FIELD
 
-            try:
-                parsed_json_forecast = LastMeasures._get_json('http://api.wunderground.com/api/' + API_KEY + '/forecast/conditions/lang:FR/q/France/' + pws_city + '.json')
-                # WIND    
-                parsed_json_wind_1 = LastMeasures._get_json('http://api.wunderground.com/api/' + API_KEY + VENT_1_URL_SUFFIX)
-                parsed_json_wind_2 = LastMeasures._get_json(VENT_PIOU_PIOU_URL_PREFIX + VENT_1_PIOU_PIOU_URL_SUFFIX)
-                parsed_json_wind_3 = LastMeasures._get_json(VENT_PIOU_PIOU_URL_PREFIX + VENT_2_PIOU_PIOU_URL_SUFFIX)
+            parsed_json_forecast = LastMeasures._get_json('http://api.wunderground.com/api/' + API_KEY + '/forecast/conditions/lang:FR/q/France/' + pws_city + '.json')
+            # WIND    
+            parsed_json_wind_1 = LastMeasures._get_json('http://api.wunderground.com/api/' + API_KEY + VENT_1_URL_SUFFIX)
+            parsed_json_wind_2 = LastMeasures._get_json(VENT_PIOU_PIOU_URL_PREFIX + VENT_1_PIOU_PIOU_URL_SUFFIX)
+            parsed_json_wind_3 = LastMeasures._get_json(VENT_PIOU_PIOU_URL_PREFIX + VENT_2_PIOU_PIOU_URL_SUFFIX)
 
-                # Je récupère les informations du jour stokées sur le tag "current_observation"
-                # Je fais attention à avoir des variables uniques dans le cas où je fais une recherche sur une chaîne de
-                # caractère plus tard (avec un grep par exemple).
+            # Je récupère les informations du jour stokées sur le tag "current_observation"
+            # Je fais attention à avoir des variables uniques dans le cas où je fais une recherche sur une chaîne de
+            # caractère plus tard (avec un grep par exemple).
 
-                city = parsed_json_pws['current_observation']['display_location']['city'] # la ville
-                latitude = parsed_json_pws['current_observation']['display_location']['latitude'] # latitude
-                longitude = parsed_json_pws['current_observation']['display_location']['longitude'] # longitude
-                elevation = parsed_json_pws['current_observation']['display_location']['elevation'] # altitude
-                last_observation = parsed_json_pws['current_observation']['observation_time_rfc822'] # l'heure dernière observation
-                last_observation = parse(last_observation)
-                last_observation = last_observation.strftime('%d/%m/%Y-%H:%M')
+            latitude = parsed_json_pws['current_observation']['display_location']['latitude'] # latitude
+            longitude = parsed_json_pws['current_observation']['display_location']['longitude'] # longitude
+            elevation = parsed_json_pws['current_observation']['display_location']['elevation'] # altitude
+            last_observation = parsed_json_pws['current_observation']['observation_time_rfc822'] # l'heure dernière observation
+            last_observation = parse(last_observation)
+            last_observation = last_observation.strftime('%d/%m/%Y-%H:%M')
+            #Reject last observation if too old    
+            if(datetime.datetime.now() - parse(last_observation, dayfirst=True)).total_seconds() > 60*60*3 :
+                print("Last observation from PWS station {} is too old - date = {}".format(PWS_ID, last_observation))
+                last_observation = "--/--/-------:--" 
+                current_weather_icon = "no_pws_data"
+
+            else :
                 current_temp = parsed_json_pws['current_observation']['temp_c'] # la température en °C
                 current_weather = parsed_json_pws['current_observation']['weather'] # le temps actuel
                 #Indication nuit non fournie dans champ "icone". En revanche dans "icon_url" on a cette indication
@@ -145,126 +151,128 @@ class LastMeasures():
                 precip_day = parsed_json_pws['current_observation']['precip_today_metric'] # cumul précipitations sur 24h
                 UV = parsed_json_pws['current_observation']['UV'] # l'indice UV
 
-            except Exception as e:
-                print( "Impossible de parser les observations de la pws {}".format(e), file=sys.stderr)
+        except Exception as e:
+            print( "Impossible de parser les observations de la pws")
+            raise
 
-                                # vent
-            wind_1_last_obs, wind_kph_1, wind_dir_1, wind_2_last_obs, wind_kph_2, wind_dir_2 = NA_FIELD, NA_FIELD, NA_FIELD, NA_FIELD, NA_FIELD, NA_FIELD            
-            try:
-                if parsed_json_wind_1 != None :
-                  wind_1_last_obs = parsed_json_wind_1['current_observation']['observation_time_rfc822'] # l'heure dernière observation
-                  wind_1_last_obs = parse(wind_1_last_obs)
-                  wind_1_last_obs = wind_1_last_obs.strftime('%d/%m/%Y-%H:%M')
-                  wind_kph_1 = parsed_json_wind_1['current_observation']['wind_kph'] # la vitesse du vent
-                  wind_dir_1 = parsed_json_wind_1['current_observation']['wind_dir'] # l'orientation du vent
+        # vent
+        wind_1_last_obs, wind_kph_1, wind_dir_1, wind_2_last_obs, wind_kph_2, wind_dir_2 = NA_FIELD, NA_FIELD, NA_FIELD, NA_FIELD, NA_FIELD, NA_FIELD            
+        try:
+            if parsed_json_wind_1 != None :
+                wind_1_last_obs = parsed_json_wind_1['current_observation']['observation_time_rfc822'] # l'heure dernière observation
+                wind_1_last_obs = parse(wind_1_last_obs)
+                wind_1_last_obs = wind_1_last_obs.strftime('%d/%m/%Y-%H:%M')
+                wind_kph_1 = parsed_json_wind_1['current_observation']['wind_kph'] # la vitesse du vent
+                wind_dir_1 = parsed_json_wind_1['current_observation']['wind_dir'] # l'orientation du vent
 
-            except KeyError as e:  
-                print( "Erreur sur les observations de vent - pas de clé pour {}".format(e), file=sys.stderr) 
+        except KeyError as e:  
+            print( "Erreur sur les observations de vent - pas de clé pour {}".format(e), file=sys.stderr) 
 
-            try:
-                if parsed_json_wind_2 != None :
-                    #piou piou
-                  wind_2_last_obs = parsed_json_wind_2['data']['measurements']['date'] # l'heure dernière observation
-                  wind_2_last_obs = parse(wind_2_last_obs).astimezone(tz.tzlocal())
-                  wind_2_last_obs = wind_2_last_obs.strftime('%d/%m/%Y-%H:%M')
-                  wind_kph_2 = parsed_json_wind_2['data']['measurements']['wind_speed_avg'] # la vitesse du vent
-                  wind_dir_2 = LastMeasures._deg_to_cardinals(parsed_json_wind_2['data']['measurements']['wind_heading'])# l'orientation du vent
-                  
-                if parsed_json_wind_3 != None :
-                    #piou piou
-                  wind_3_last_obs = parsed_json_wind_3['data']['measurements']['date'] # l'heure dernière observation
-                  wind_3_last_obs = parse(wind_3_last_obs).astimezone(tz.tzlocal())
-                  wind_3_last_obs = wind_3_last_obs.strftime('%d/%m/%Y-%H:%M')
-                  wind_kph_3 = parsed_json_wind_3['data']['measurements']['wind_speed_avg'] # la vitesse du vent
-                  wind_dir_3 = LastMeasures._deg_to_cardinals(parsed_json_wind_3['data']['measurements']['wind_heading'])# l'orientation du vent
+        try:
+            if parsed_json_wind_2 != None :
+                #piou piou
+              wind_2_last_obs = parsed_json_wind_2['data']['measurements']['date'] # l'heure dernière observation
+              wind_2_last_obs = parse(wind_2_last_obs).astimezone(tz.tzlocal())
+              wind_2_last_obs = wind_2_last_obs.strftime('%d/%m/%Y-%H:%M')
+              wind_kph_2 = parsed_json_wind_2['data']['measurements']['wind_speed_avg'] # la vitesse du vent
+              wind_dir_2 = LastMeasures._deg_to_cardinals(parsed_json_wind_2['data']['measurements']['wind_heading'])# l'orientation du vent
 
-            except Exception as e:
-                print( "Impossible de parser les observations de pioupiou - {}".format(e), file=sys.stderr)
+            if parsed_json_wind_3 != None :
+                #piou piou
+              wind_3_last_obs = parsed_json_wind_3['data']['measurements']['date'] # l'heure dernière observation
+              wind_3_last_obs = parse(wind_3_last_obs).astimezone(tz.tzlocal())
+              wind_3_last_obs = wind_3_last_obs.strftime('%d/%m/%Y-%H:%M')
+              wind_kph_3 = parsed_json_wind_3['data']['measurements']['wind_speed_avg'] # la vitesse du vent
+              wind_dir_3 = LastMeasures._deg_to_cardinals(parsed_json_wind_3['data']['measurements']['wind_heading'])# l'orientation du vent
 
-            # Un petit test sur l'indice UV qui peut être négatif
-            if str(UV) == '-1':
-                UV = 0
+        except Exception as e:
+            print( "Impossible de parser les observations de pioupiou - {}".format(e), file=sys.stderr)
 
-            # Une petite transformation de la tendance atmosphérique
+        # Un petit test sur l'indice UV qui peut être négatif
+        if str(UV) == '-1':
+            UV = 0
 
-            if pressure_trend == '-':
-                pressure_trend = 'en baisse'
-            elif pressure_trend == '+':
-                pressure_trend = 'en hausse'
-            else:
-                pressure_trend = 'stable'
+        # Une petite transformation de la tendance atmosphérique
 
-            #Add pollution data
-            poll_data = LastMeasures._get_ara_pollution_data(POLLUTION_STATION_ID)
-            city_poll_levels = self._get_curr_poll_level()
-    
-            # get home data
-            home_temp = self._influxdb_get_last_point(INFLUX_HOME_TEMP_FIELD)
-            home_hum  = self._influxdb_get_last_point(INFLUXDB_HOME_HUMIDITY_FIELD)             
+        if pressure_trend == '-':
+            pressure_trend = 'en baisse'
+        elif pressure_trend == '+':
+            pressure_trend = 'en hausse'
+        else:
+            pressure_trend = 'stable'
 
-            # J'écris ces informations dans un fichier qui servira plus tard pour le conky meteo.
-            # En ouvrant le fichier en mode 'w', j'écrase le fichier meteo.txt précédent 
-            # Je transforme tous les chiffres en chaînes de caractères et j'encode tous les textes français en UTF8    
-            # Je n'ai pas besoin de fermer le fichier en utilisant "with open"
+        #Add pollution data
+        poll_data = LastMeasures._get_ara_pollution_data(POLLUTION_STATION_ID)
+        city_poll_levels = self._get_curr_poll_level()
 
-            with open(POLLED_DATA_PATH, 'w') as f: 
-                f.write("Meteo = " + current_weather + "\n")
-                f.write("Icone_temps = " + current_weather_icon + "\n")
-                f.write("Ville = " + city + "\n")
-                f.write("Derniere_observation = " + last_observation + "\n")
-                f.write("Temperature = " + str(current_temp) + " °C\n")
-                f.write("Ressentie = " + str(feelslike_c) + " °C\n")
-                f.write("Humidite = " + humidity + "\n")
-                f.write("Precip_1h = " + str(precip_last_hr) + "\n")
-                f.write("Precip_1j = " + str(precip_day) + "\n")
-                f.write("Vent = " + str(wind_kph) + " km/h\n")
-                f.write("Dir_vent = " + wind_dir + "\n")
-                f.write("Vent_1_Derniere_observation = " + wind_1_last_obs + "\n")
-                f.write("Vent_1 = " + str(wind_kph_1) + " km/h\n")
-                f.write("Dir_vent_1 = " + str(wind_dir_1) + "\n")
-                f.write("Vent_2_Derniere_observation = " + wind_2_last_obs + "\n")
-                f.write("Vent_2 = " + str(wind_kph_2) + " km/h\n")
-                f.write("Dir_vent_2 = " + str(wind_dir_2) + "\n")
-                f.write("Vent_3_Derniere_observation = " + wind_3_last_obs + "\n")
-                f.write("Vent_3 = " + str(wind_kph_3) + " km/h\n")
-                f.write("Dir_vent_3 = " + str(wind_dir_3) + "\n")
-                f.write("Pression = " + str(pressure_mb) + " mb\n")
-                f.write("Tend_pres = " + pressure_trend + "\n") 
-                f.write("Visibilite = " + str(visibility) + " km\n")
-                f.write("Indice_UV = " + str(UV) + "\n")
-                f.write("Maison_salon_temp = " + home_temp + "\n")
-                f.write("Maison_salon_hum = " + home_hum + "\n")             
+        # get home data
+        home_temp = self._influxdb_get_last_point(INFLUX_HOME_TEMP_FIELD)
+        home_hum  = self._influxdb_get_last_point(INFLUXDB_HOME_HUMIDITY_FIELD)             
 
-                dioxyde_azote=NA_FIELD
-                monoxyde_azote = NA_FIELD
-                ozone = NA_FIELD
-                pm_10 = NA_FIELD
-                poll_station=NA_FIELD
-                poll_timestamp=NA_FIELD
-                pm_2_5 = NA_FIELD
+        # J'écris ces informations dans un fichier qui servira plus tard pour le conky meteo.
+        # En ouvrant le fichier en mode 'w', j'écrase le fichier meteo.txt précédent 
+        # Je transforme tous les chiffres en chaînes de caractères et j'encode tous les textes français en UTF8    
+        # Je n'ai pas besoin de fermer le fichier en utilisant "with open"
 
-                if len(poll_data) > 0 :
-                    try :
-                        dioxyde_azote = poll_data['Dioxyde d\'azote'][0]
-                        monoxyde_azote = poll_data['Monoxyde d\'azote'][0]
-                        ozone = poll_data['Ozone'][0]
-                        pm_10 = poll_data['Particules PM10'][0]
-                        poll_station = poll_data['Station']
-                        poll_timestamp=poll_data['Timestamp']
-                        pm_2_5 = poll_data['Particules PM2,5'][0]
-                    except Exception as e:
-                        print("Some pollution fields are missing - {}".format(e), file=sys.stderr)
+        with open(POLLED_DATA_PATH, 'w') as f: 
+            f.write("Meteo = " + current_weather + "\n")
+            f.write("Icone_temps = " + current_weather_icon + "\n")
+            f.write("Ville = " + pws_city + "\n")
+            f.write("Derniere_observation = " + last_observation + "\n")
+            f.write("Temperature = " + str(current_temp) + " °C\n")
+            f.write("Ressentie = " + str(feelslike_c) + " °C\n")
+            f.write("Humidite = " + humidity + "\n")
+            f.write("Precip_1h = " + str(precip_last_hr) + "\n")
+            f.write("Precip_1j = " + str(precip_day) + "\n")
+            f.write("Vent = " + str(wind_kph) + " km/h\n")
+            f.write("Dir_vent = " + wind_dir + "\n")
+            f.write("Vent_1_Derniere_observation = " + wind_1_last_obs + "\n")
+            f.write("Vent_1 = " + str(wind_kph_1) + " km/h\n")
+            f.write("Dir_vent_1 = " + str(wind_dir_1) + "\n")
+            f.write("Vent_2_Derniere_observation = " + wind_2_last_obs + "\n")
+            f.write("Vent_2 = " + str(wind_kph_2) + " km/h\n")
+            f.write("Dir_vent_2 = " + str(wind_dir_2) + "\n")
+            f.write("Vent_3_Derniere_observation = " + wind_3_last_obs + "\n")
+            f.write("Vent_3 = " + str(wind_kph_3) + " km/h\n")
+            f.write("Dir_vent_3 = " + str(wind_dir_3) + "\n")
+            f.write("Pression = " + str(pressure_mb) + " mb\n")
+            f.write("Tend_pres = " + pressure_trend + "\n") 
+            f.write("Visibilite = " + str(visibility) + " km\n")
+            f.write("Indice_UV = " + str(UV) + "\n")
+            f.write("Maison_salon_temp = " + home_temp + "\n")
+            f.write("Maison_salon_hum = " + home_hum + "\n")             
 
-                f.write('Poll_station = ' + poll_station + '\n') 
-                f.write('Poll_timestamp = ' + poll_timestamp + '\n')
-                f.write('Dioxyde_azote = ' + dioxyde_azote + '\n') 
-                f.write('Monoxyde_azote = ' + monoxyde_azote + '\n') 
-                f.write('Ozone = ' + ozone + '\n') 
-                f.write('PM10 = ' + pm_10 + '\n') 
-                f.write('PM2_5 = ' + pm_2_5 + '\n') 
-                f.write('poll_level = ' + city_poll_levels[0] + '\n')
-                f.write('jour1_poll_level = ' + city_poll_levels[1] + '\n')
+            poll_station=NA_FIELD
+            poll_timestamp=NA_FIELD
+            pollution_fields= { 
+                    'Dioxyde_azote' : 'Dioxyde d\'azote', 
+                    'Monoxyde_azote' : 'Monoxyde d\'azote', 
+                    'Ozone' : 'Ozone', 
+                    'PM10' : 'Particules PM10', 
+                    'PM2_5' : 'Particules PM2,5'}
 
+            if len(poll_data) > 0 :
+                poll_station = poll_data["Station"]
+                poll_timestamp=poll_data["Timestamp"]
+
+                for field_name in pollution_fields :
+                    if  pollution_fields[field_name] in poll_data :
+                        field = poll_data[pollution_fields[field_name]][0]
+                    else :
+                        field = NA_FIELD
+                        print("Pollution data {} missing".format(field_name), file=sys.stderr)
+                    f.write(field_name + ' = ' + field + '\n') 
+            else :
+                for field_name in pollution_fields :
+                    f.write(field_name + ' = ' + "NA_FIELD" + '\n') 
+
+
+            f.write('Poll_station = ' + poll_station + '\n') 
+            f.write('Poll_timestamp = ' + poll_timestamp + '\n')
+            f.write('poll_level = ' + city_poll_levels[0] + '\n')
+            f.write('jour1_poll_level = ' + city_poll_levels[1] + '\n')
+
+        try :
             # Je récupère les prévisions sous le tag "simpleforecast", en bouclant sur chacune des périodes
             forecast = parsed_json_forecast['forecast']['simpleforecast']['forecastday']
             for i in forecast:
@@ -313,11 +321,9 @@ class LastMeasures():
                     f.write(date + "_vent = "  + str(vent) + "km/h\n")            
                     f.write(date + "_dir_vent = "  + vent_dir + "\n")             
                     f.write(date + "_tx_himidite = "  + str(tx_humidite) + "%\n")          
-            ############################################
-            #             Le fin du programme          #
-            ############################################  
-            #SUR WU 10 call/minute ou 500 call /jour max lorsque l'utilisateur a une clé développeur
-            time.sleep(600) # C'est la fin de ma boucle de démonisation. La temporisation est de 120 secondes  
+        except Exception as e :
+            print("cannot get forecast - {}".format(e))
+
 
     def _influxdb_get_last_point(self, valueId):
         # read in the data from influxdb
@@ -471,4 +477,11 @@ if __name__ == '__main__':
     print("starting wu_pws_polling script")
 
     last_meas = LastMeasures()
-    last_meas.fetch_data()
+    while(True) :
+        try :
+            last_meas.fetch_data()
+        except Exception as e :
+            print("error when fetching data {}".format(e))
+        finally :
+            #SUR WU 10V call/minute ou 500 call /jour max lorsque l'utilisateur a une clé développeur
+            time.sleep(600)  
